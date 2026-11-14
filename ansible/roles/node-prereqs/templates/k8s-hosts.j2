@@ -1,0 +1,3 @@
+{% for node in groups['k8s_nodes'] | sort %}
+{{ hostvars[node].private_ip_address }} {{ hostvars[node].ec2_tags.Name }}
+{% endfor %}

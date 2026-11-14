@@ -1,0 +1,131 @@
+name: Destroy nonprod
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: First review a plan, then confirm destruction
+        required: true
+        type: choice
+        options:
+          - plan
+          - destroy
+        default: plan
+      confirmation:
+        description: For destroy, enter exactly 'destroy nonprod'
+        required: false
+        type: string
+      plan_digest:
+        description: Digest printed by the reviewed plan run; required for destroy
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: nonprod-lifecycle
+  cancel-in-progress: false
+
+jobs:
+  destroy:
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.operation == 'destroy' && 'nonprod-destroy' || 'nonprod' }}
+    env:
+      AWS_REGION: us-east-1
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+    steps:
+      - name: Check destruction confirmation
+        if: inputs.operation == 'destroy'
+        env:
+          CONFIRMATION: ${{ inputs.confirmation }}
+          PLAN_DIGEST: ${{ inputs.plan_digest }}
+        run: |
+          [[ "$CONFIRMATION" == "destroy nonprod" ]] || {
+            echo "::error::Type the exact confirmation 'destroy nonprod'."
+            exit 1
+          }
+          [[ "$PLAN_DIGEST" =~ ^[a-f0-9]{64}$ ]] || {
+            echo "::error::Provide the 64-character digest from a reviewed plan run."
+            exit 1
+          }
+
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials with OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::982468346394:role/GitHubActionsTerraform-NonProd-VPC
+          aws-region: ${{ env.AWS_REGION }}
+          role-session-name: nonprod-destroy-${{ github.run_id }}
+
+      - name: Verify AWS account and state bucket versioning
+        shell: bash
+        run: |
+          set -euo pipefail
+          account_id="$(aws sts get-caller-identity --query Account --output text)"
+          [[ "$account_id" == "982468346394" ]] || {
+            echo "::error::OIDC role resolved to unexpected AWS account $account_id"
+            exit 1
+          }
+          versioning="$(aws s3api get-bucket-versioning \
+            --bucket terraform-statefile-srinivasa \
+            --query Status --output text)"
+          [[ "$versioning" == "Enabled" ]] || {
+            echo "::error::Enable S3 bucket versioning before using it for Terraform state."
+            exit 1
+          }
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.14.7
+          terraform_wrapper: false
+
+      - name: Initialize Terraform backend
+        working-directory: Environments/nonprod/terraform
+        run: terraform init -input=false
+
+      - name: Create destroy plan
+        working-directory: Environments/nonprod/terraform
+        run: terraform plan -destroy -input=false -out="$RUNNER_TEMP/nonprod-destroy.tfplan"
+
+      - name: Review destroy plan and compute digest
+        id: review
+        working-directory: Environments/nonprod/terraform
+        shell: bash
+        run: |
+          set -euo pipefail
+          plan="$RUNNER_TEMP/nonprod-destroy.tfplan"
+          plan_json="$(terraform show -json "$plan")"
+          changes="$(jq '[.resource_changes[] | select(.change.actions != ["no-op"])] | length' <<< "$plan_json")"
+          [[ "$changes" -gt 0 ]] || {
+            echo "::error::The selected nonprod state has no resources to destroy."
+            exit 1
+          }
+          summary="$(jq -r '.resource_changes[] | select(.change.actions | index("delete")) | "\(.address) [\(.change.actions | join(","))]"' <<< "$plan_json")"
+          digest_payload="$(jq -cS '[.resource_changes[] | select(.change.actions != ["no-op"]) | {address: .address, change: .change}]' <<< "$plan_json")"
+          digest="$(printf '%s' "$digest_payload" | sha256sum | cut -d' ' -f1)"
+          echo "Planned resources to change: $changes"
+          printf '%s\n' "$summary"
+          echo "Plan digest: $digest"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+      - name: Require reviewed plan digest before destroy
+        if: inputs.operation == 'destroy'
+        env:
+          EXPECTED_DIGEST: ${{ inputs.plan_digest }}
+          ACTUAL_DIGEST: ${{ steps.review.outputs.digest }}
+        run: |
+          [[ "$EXPECTED_DIGEST" == "$ACTUAL_DIGEST" ]] || {
+            echo "::error::The destroy plan changed since review; run plan again and review its digest."
+            exit 1
+          }
+
+      - name: Apply destroy plan
+        if: inputs.operation == 'destroy'
+        working-directory: Environments/nonprod/terraform
+        run: terraform apply -input=false -auto-approve "$RUNNER_TEMP/nonprod-destroy.tfplan"

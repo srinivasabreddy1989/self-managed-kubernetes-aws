@@ -1,0 +1,92 @@
+---
+- name: Validate target inventory and run configuration
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Require AWS SSM transfer bucket and cluster endpoint
+      ansible.builtin.assert:
+        that:
+          - lookup('env', 'ANSIBLE_SSM_BUCKET_NAME') | length > 0
+          - lookup('env', 'KUBERNETES_API_ENDPOINT') | length > 0
+        fail_msg: Set ANSIBLE_SSM_BUCKET_NAME and KUBERNETES_API_ENDPOINT before running this playbook.
+
+    - name: Require expected non-empty control-plane and worker inventory
+      ansible.builtin.assert:
+        that:
+          - groups['k8s_nodes'] | length == expected_control_planes + expected_workers
+          - groups['control_plane'] | length == expected_control_planes
+          - groups['workers'] | length == expected_workers
+        fail_msg: The AWS inventory does not match the selected environment's expected node counts.
+
+- name: Prepare all Kubernetes nodes
+  hosts: k8s_nodes
+  gather_facts: false
+  become: true
+  roles:
+    - node-prereqs
+    - containerd
+    - kubernetes
+
+- name: Initialize the first control-plane node if needed
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Initialize the elected first control-plane node
+      ansible.builtin.include_role:
+        name: kubeadm
+        tasks_from: init.yml
+      when: inventory_hostname == (groups['control_plane'] | sort | first)
+
+- name: Install Calico from the first control-plane node
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Apply the Calico installation
+      ansible.builtin.include_role:
+        name: calico
+      when: inventory_hostname == (groups['control_plane'] | sort | first)
+
+- name: Generate short-lived kubeadm join credentials
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Generate join credentials on the elected first control-plane node
+      ansible.builtin.include_role:
+        name: kubeadm
+        tasks_from: credentials.yml
+      when: inventory_hostname == (groups['control_plane'] | sort | first)
+
+- name: Join additional control-plane nodes
+  hosts: control_plane
+  serial: 1
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Join this node when it is not already initialized
+      ansible.builtin.include_role:
+        name: kubeadm
+        tasks_from: join-control-plane.yml
+      when: inventory_hostname != (groups['control_plane'] | sort | first)
+
+- name: Join worker nodes
+  hosts: workers
+  gather_facts: false
+  become: true
+  roles:
+    - role: kubeadm
+      tasks_from: join-worker.yml
+
+- name: Revoke temporary credentials and verify the cluster
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Clean up temporary credentials and verify readiness
+      ansible.builtin.include_role:
+        name: kubeadm
+        tasks_from: verify.yml
+      when: inventory_hostname == (groups['control_plane'] | sort | first)

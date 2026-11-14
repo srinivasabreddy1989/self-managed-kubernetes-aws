@@ -1,0 +1,71 @@
+---
+- name: Set node hostname from EC2 Name tag
+  ansible.builtin.hostname:
+    name: "{{ ec2_tags.Name }}"
+
+- name: Configure cluster node name resolution
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} ANSIBLE KUBERNETES NODES"
+    block: "{{ lookup('template', 'k8s-hosts.j2') }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Wait for system time synchronization
+  ansible.builtin.command: timedatectl show --property=NTPSynchronized --value
+  register: time_sync
+  changed_when: false
+  retries: 20
+  delay: 6
+  until: time_sync.stdout | trim == 'yes'
+
+- name: Disable active swap
+  ansible.builtin.shell: |
+    if swapon --noheadings --show | grep -q .; then
+      swapoff --all
+      echo disabled
+    fi
+  args:
+    executable: /bin/bash
+  register: swap_disable
+  changed_when: "'disabled' in swap_disable.stdout"
+
+- name: Disable swap entries in fstab
+  ansible.builtin.replace:
+    path: /etc/fstab
+    regexp: '^([^#].*\s+swap\s+.*)$'
+    replace: '# \1'
+
+- name: Persist required kernel modules
+  ansible.builtin.copy:
+    dest: /etc/modules-load.d/k8s.conf
+    content: |
+      overlay
+      br_netfilter
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load required kernel modules
+  community.general.modprobe:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - overlay
+    - br_netfilter
+
+- name: Configure Kubernetes networking sysctls
+  ansible.posix.sysctl:
+    name: "{{ item.name }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/k8s.conf
+    reload: true
+    state: present
+  loop:
+    - name: net.bridge.bridge-nf-call-iptables
+      value: "1"
+    - name: net.bridge.bridge-nf-call-ip6tables
+      value: "1"
+    - name: net.ipv4.ip_forward
+      value: "1"

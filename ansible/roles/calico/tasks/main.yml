@@ -1,0 +1,74 @@
+---
+- name: Apply Calico CRDs
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - apply
+      - -f
+      - "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/v3_projectcalico_org.yaml"
+  register: calico_crds
+  changed_when: "'created' in calico_crds.stdout or 'configured' in calico_crds.stdout"
+
+- name: Wait for the Calico Installation CRD
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - wait
+      - --for=condition=Established
+      - --timeout=120s
+      - crd/installations.operator.tigera.io
+  changed_when: false
+
+- name: Apply Tigera operator
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - apply
+      - -f
+      - "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/tigera-operator.yaml"
+  register: tigera_operator
+  changed_when: "'created' in tigera_operator.stdout or 'configured' in tigera_operator.stdout"
+
+- name: Wait for the Tigera operator deployment
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - rollout
+      - status
+      - deployment/tigera-operator
+      - --namespace=tigera-operator
+      - --timeout=600s
+  register: tigera_rollout
+  changed_when: false
+  retries: 3
+  delay: 10
+  until: tigera_rollout.rc == 0
+
+- name: Render Calico installation configuration
+  ansible.builtin.template:
+    src: calico-installation.yaml.j2
+    dest: /etc/kubernetes/calico-installation.yaml
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Apply Calico installation configuration
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - apply
+      - -f
+      - /etc/kubernetes/calico-installation.yaml
+  register: calico_installation
+  changed_when: "'created' in calico_installation.stdout or 'configured' in calico_installation.stdout"
+

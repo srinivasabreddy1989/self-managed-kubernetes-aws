@@ -1,0 +1,49 @@
+---
+- name: Check whether this control-plane node is already initialized
+  ansible.builtin.stat:
+    path: /etc/kubernetes/admin.conf
+  register: kubeadm_admin_conf
+
+- name: Create kubeadm configuration directory
+  ansible.builtin.file:
+    path: /etc/kubernetes
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not kubeadm_admin_conf.stat.exists
+
+- name: Render kubeadm configuration for the first control-plane node
+  ansible.builtin.template:
+    src: kubeadm-config.yaml.j2
+    dest: /etc/kubernetes/kubeadm-config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  when: not kubeadm_admin_conf.stat.exists
+
+- name: Initialize Kubernetes only when this node has not been initialized
+  ansible.builtin.command:
+    argv:
+      - kubeadm
+      - init
+      - --config
+      - /etc/kubernetes/kubeadm-config.yaml
+      - --upload-certs
+  when: not kubeadm_admin_conf.stat.exists
+  changed_when: true
+  no_log: true
+
+- name: Wait for the local API server to become ready
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - get
+      - --raw=/readyz
+  register: local_api_ready
+  changed_when: false
+  retries: 60
+  delay: 10
+  until: local_api_ready.rc == 0 and local_api_ready.stdout | trim == 'ok'

@@ -1,0 +1,49 @@
+---
+- name: Install pinned containerd package
+  ansible.builtin.apt:
+    name: "containerd={{ containerd_package_version }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Check for existing containerd configuration
+  ansible.builtin.stat:
+    path: /etc/containerd/config.toml
+  register: containerd_config_file
+
+- name: Create containerd configuration directory
+  ansible.builtin.file:
+    path: /etc/containerd
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Generate default containerd configuration when absent
+  ansible.builtin.shell: containerd config default > /etc/containerd/config.toml
+  args:
+    creates: /etc/containerd/config.toml
+  register: containerd_default_config
+
+- name: Enable the systemd cgroup driver
+  ansible.builtin.replace:
+    path: /etc/containerd/config.toml
+    regexp: '(?m)^(\s*SystemdCgroup\s*=\s*)false$'
+    replace: '\g<1>true'
+  register: containerd_cgroup_config
+
+- name: Verify the containerd cgroup setting
+  ansible.builtin.command: grep -Eq '^\s*SystemdCgroup\s*=\s*true$' /etc/containerd/config.toml
+  changed_when: false
+
+- name: Enable and start containerd
+  ansible.builtin.systemd:
+    name: containerd
+    enabled: true
+    state: started
+
+- name: Restart containerd after configuration changes
+  ansible.builtin.systemd:
+    name: containerd
+    state: restarted
+  when: containerd_default_config.changed or containerd_cgroup_config.changed

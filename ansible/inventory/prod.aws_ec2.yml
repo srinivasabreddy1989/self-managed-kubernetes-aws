@@ -1,0 +1,16 @@
+plugin: amazon.aws.aws_ec2
+regions:
+  - us-east-1
+filters:
+  instance-state-name: running
+  tag:Environment: production
+  tag:Project: kubernetes
+hostnames:
+  - instance-id
+compose:
+  ansible_host: instance_id
+  ansible_aws_ssm_instance_id: instance_id
+groups:
+  k8s_nodes: ec2_tags.Role in ['control-plane', 'worker']
+  control_plane: ec2_tags.Role == 'control-plane'
+  workers: ec2_tags.Role == 'worker'

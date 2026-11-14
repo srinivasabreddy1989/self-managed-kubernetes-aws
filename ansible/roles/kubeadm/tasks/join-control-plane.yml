@@ -1,0 +1,26 @@
+---
+- name: Check whether this control-plane node has joined
+  ansible.builtin.stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_config
+
+- name: Join this control-plane node only when not already joined
+  ansible.builtin.command:
+    argv:
+      - kubeadm
+      - join
+      - "{{ hostvars['localhost'].kubeadm_join_endpoint }}"
+      - --token
+      - "{{ hostvars['localhost'].kubeadm_join_token }}"
+      - --discovery-token-ca-cert-hash
+      - "{{ hostvars['localhost'].kubeadm_discovery_hash }}"
+      - --control-plane
+      - --certificate-key
+      - "{{ hostvars['localhost'].kubeadm_certificate_key }}"
+      - --apiserver-advertise-address
+      - "{{ private_ip_address }}"
+      - --cri-socket
+      - unix:///run/containerd/containerd.sock
+  when: not kubelet_config.stat.exists
+  changed_when: true
+  no_log: true

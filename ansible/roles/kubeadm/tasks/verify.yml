@@ -1,0 +1,66 @@
+---
+- name: Revoke the temporary bootstrap token
+  ansible.builtin.command:
+    argv:
+      - kubeadm
+      - token
+      - delete
+      - "{{ hostvars['localhost'].kubeadm_join_token }}"
+  changed_when: true
+  no_log: true
+
+- name: Remove the temporary uploaded certificate secret
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - delete
+      - secret
+      - kubeadm-certs
+      - --namespace=kube-system
+      - --ignore-not-found=true
+  register: certificate_secret_cleanup
+  changed_when: "'deleted' in certificate_secret_cleanup.stdout"
+
+- name: Wait until every Kubernetes node is Ready
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - wait
+      - --for=condition=Ready
+      - node
+      - --all
+      - --timeout=600s
+  changed_when: false
+
+- name: Wait until Calico is running on every node
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - rollout
+      - status
+      - daemonset/calico-node
+      - --namespace=calico-system
+      - --timeout=900s
+  changed_when: false
+
+- name: Read Calico operator status
+  ansible.builtin.command:
+    argv:
+      - kubectl
+      - --kubeconfig=/etc/kubernetes/admin.conf
+      - --server=https://127.0.0.1:6443
+      - get
+      - tigerastatus
+  register: tigerastatus
+  changed_when: false
+
+- name: Show final node and Calico status
+  ansible.builtin.debug:
+    msg:
+      - "{{ tigerastatus.stdout }}"

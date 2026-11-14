@@ -2,8 +2,20 @@ terraform.tfvars
 
 # Terraform working directories
 .terraform/
-.terraform.lock.hcl
 
 # Terraform state files
 *.tfstate
 *.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Ansible-generated files
+*.retry
+ansible/inventory/generated/
+ansible/.ansible/
+
+# Kubernetes credentials
+**/admin.conf
+**/kubeconfig
+**/.kube/
