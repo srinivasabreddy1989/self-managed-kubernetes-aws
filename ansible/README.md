@@ -18,7 +18,7 @@ ansible-playbook -i inventory/nonprod.aws_ec2.yml site.yml \
   -e @environments/nonprod.yml --syntax-check
 ```
 
-A live run also requires AWS credentials that can describe the tagged EC2 nodes, use Systems Manager sessions, and access the SSM transfer bucket. Set `KUBERNETES_API_ENDPOINT` and `ANSIBLE_SSM_BUCKET_NAME` in the controller environment. The playbook never runs `kubeadm reset`; it initializes missing control-plane state and joins only nodes without `/etc/kubernetes/kubelet.conf`.
+A live run also requires AWS credentials that can describe the tagged EC2 nodes, use Systems Manager sessions, and access the SSM transfer bucket. Set `KUBERNETES_API_ENDPOINT` to the private API endpoint reachable by cluster nodes and `ANSIBLE_SSM_BUCKET_NAME` in the controller environment. Nonprod also exports `KUBERNETES_PUBLIC_API_ENDPOINT` for administrator access; do not use that public EIP as kubeadm's in-cluster endpoint. The playbook never runs `kubeadm reset`; it initializes missing control-plane state and joins only nodes without `/etc/kubernetes/kubelet.conf`.
 
 ## GitHub setup
 

@@ -10,7 +10,13 @@ output "public_subnet_ids" {
 }
 
 output "control_plane_api_endpoint" {
-  value = "${aws_eip.control_plane.public_ip}:6443"
+  description = "Public Kubernetes API endpoint for administrator access"
+  value       = "${aws_eip.control_plane.public_ip}:6443"
+}
+
+output "control_plane_internal_api_endpoint" {
+  description = "Private Kubernetes API endpoint for cluster nodes"
+  value       = "${aws_instance.nodes["control-plane"].private_ip}:6443"
 }
 
 output "nodes" {

@@ -100,10 +100,17 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          endpoint="$(terraform output -raw control_plane_api_endpoint)"
+          nodes="$(terraform output -json nodes)"
+          control_plane_private_ip="$(jq -er '."control-plane".private_ip' <<< "$nodes")"
+          endpoint="${control_plane_private_ip}:6443"
+          public_endpoint="$(terraform output -raw control_plane_api_endpoint)"
           bucket="$(terraform output -raw ansible_ssm_bucket_name)"
           [[ "$endpoint" =~ ^[A-Za-z0-9.-]+:6443$ ]] || {
-            echo "::error::Unexpected Kubernetes API endpoint format."
+            echo "::error::Unexpected internal Kubernetes API endpoint format."
+            exit 1
+          }
+          [[ "$public_endpoint" =~ ^[A-Za-z0-9.-]+:6443$ ]] || {
+            echo "::error::Unexpected public Kubernetes API endpoint format."
             exit 1
           }
           [[ "$bucket" =~ ^[a-z0-9.-]{3,63}$ ]] || {
@@ -112,6 +119,7 @@ jobs:
           }
           {
             echo "KUBERNETES_API_ENDPOINT=$endpoint"
+            echo "KUBERNETES_PUBLIC_API_ENDPOINT=$public_endpoint"
             echo "ANSIBLE_SSM_BUCKET_NAME=$bucket"
           } >> "$GITHUB_ENV"
 
