@@ -14,7 +14,7 @@
     argv:
       - kubectl
       - --kubeconfig=/etc/kubernetes/admin.conf
-      - --server=https://127.0.0.1:6443
+      - --server=https://{{ private_ip_address }}:6443
       - delete
       - secret
       - kubeadm-certs
@@ -28,7 +28,7 @@
     argv:
       - kubectl
       - --kubeconfig=/etc/kubernetes/admin.conf
-      - --server=https://127.0.0.1:6443
+      - --server=https://{{ private_ip_address }}:6443
       - wait
       - --for=condition=Ready
       - node
@@ -41,7 +41,7 @@
     argv:
       - kubectl
       - --kubeconfig=/etc/kubernetes/admin.conf
-      - --server=https://127.0.0.1:6443
+      - --server=https://{{ private_ip_address }}:6443
       - rollout
       - status
       - daemonset/calico-node
@@ -54,7 +54,7 @@
     argv:
       - kubectl
       - --kubeconfig=/etc/kubernetes/admin.conf
-      - --server=https://127.0.0.1:6443
+      - --server=https://{{ private_ip_address }}:6443
       - get
       - tigerastatus
   register: tigerastatus

@@ -39,7 +39,7 @@
     argv:
       - kubectl
       - --kubeconfig=/etc/kubernetes/admin.conf
-      - --server=https://127.0.0.1:6443
+      - --server=https://{{ private_ip_address }}:6443
       - get
       - --raw=/readyz
   register: local_api_ready
