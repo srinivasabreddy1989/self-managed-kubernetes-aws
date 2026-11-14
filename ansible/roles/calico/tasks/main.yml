@@ -6,10 +6,16 @@
       - --kubeconfig=/etc/kubernetes/admin.conf
       - --server=https://{{ private_ip_address }}:6443
       - apply
+      - --server-side
+      - --force-conflicts
+      - --field-manager=ansible-kubeadm
       - -f
       - "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/v3_projectcalico_org.yaml"
   register: calico_crds
-  changed_when: "'created' in calico_crds.stdout or 'configured' in calico_crds.stdout"
+  changed_when: >-
+    'created' in calico_crds.stdout or
+    'configured' in calico_crds.stdout or
+    'serverside-applied' in calico_crds.stdout
 
 - name: Wait for the Calico Installation CRD
   ansible.builtin.command:
@@ -30,10 +36,16 @@
       - --kubeconfig=/etc/kubernetes/admin.conf
       - --server=https://{{ private_ip_address }}:6443
       - apply
+      - --server-side
+      - --force-conflicts
+      - --field-manager=ansible-kubeadm
       - -f
       - "https://raw.githubusercontent.com/projectcalico/calico/{{ calico_version }}/manifests/tigera-operator.yaml"
   register: tigera_operator
-  changed_when: "'created' in tigera_operator.stdout or 'configured' in tigera_operator.stdout"
+  changed_when: >-
+    'created' in tigera_operator.stdout or
+    'configured' in tigera_operator.stdout or
+    'serverside-applied' in tigera_operator.stdout
 
 - name: Wait for the Tigera operator deployment
   ansible.builtin.command:
@@ -67,8 +79,14 @@
       - --kubeconfig=/etc/kubernetes/admin.conf
       - --server=https://{{ private_ip_address }}:6443
       - apply
+      - --server-side
+      - --force-conflicts
+      - --field-manager=ansible-kubeadm
       - -f
       - /etc/kubernetes/calico-installation.yaml
   register: calico_installation
-  changed_when: "'created' in calico_installation.stdout or 'configured' in calico_installation.stdout"
+  changed_when: >-
+    'created' in calico_installation.stdout or
+    'configured' in calico_installation.stdout or
+    'serverside-applied' in calico_installation.stdout
 
