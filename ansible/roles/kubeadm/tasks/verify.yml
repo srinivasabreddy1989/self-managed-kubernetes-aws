@@ -6,6 +6,7 @@
       - token
       - delete
       - "{{ hostvars['localhost'].kubeadm_join_token }}"
+      - --kubeconfig=/etc/kubernetes/admin-local.conf
   changed_when: true
   no_log: true
 
@@ -64,3 +65,8 @@
   ansible.builtin.debug:
     msg:
       - "{{ tigerastatus.stdout }}"
+
+- name: Remove the temporary local API kubeconfig
+  ansible.builtin.file:
+    path: /etc/kubernetes/admin-local.conf
+    state: absent
