@@ -28,6 +28,7 @@ jobs:
       AWS_REGION: us-east-1
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
+      TF_VAR_admin_cidr: ${{ vars.NONPROD_ADMIN_CIDR }}
     steps:
       - name: Check out repository
         uses: actions/checkout@v4
@@ -72,6 +73,17 @@ jobs:
       - name: Validate Terraform
         working-directory: Environments/nonprod/terraform
         run: terraform validate
+
+      - name: Require the nonprod administrator CIDR for deploys
+        if: inputs.operation == 'deploy'
+        env:
+          NONPROD_ADMIN_CIDR: ${{ vars.NONPROD_ADMIN_CIDR }}
+        shell: bash
+        run: |
+          if [[ -z "$NONPROD_ADMIN_CIDR" ]]; then
+            echo "::error::Set NONPROD_ADMIN_CIDR in the nonprod GitHub Environment (for example, your trusted public IP with /32)."
+            exit 1
+          fi
 
       - name: Plan infrastructure
         if: inputs.operation == 'deploy'

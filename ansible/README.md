@@ -30,7 +30,7 @@ aws s3api put-bucket-versioning \
   --versioning-configuration Status=Enabled
 ```
 
-The nonprod workflows use the OIDC role `GitHubActionsTerraform-NonProd-VPC` in account `982468346394`. Because the jobs use GitHub Environments, its OIDC trust policy must allow the subjects `repo:<OWNER>/<REPO>:environment:nonprod` and `repo:<OWNER>/<REPO>:environment:nonprod-destroy`, with audience `sts.amazonaws.com`. Restrict both GitHub Environments to the `master` deployment branch; require reviewers for `nonprod-destroy`. Its permissions must cover:
+The nonprod workflows use the OIDC role `self-managed-kubernetes-setup` in account `982468346394`. Because the jobs use GitHub Environments, its OIDC trust policy must allow the subjects `repo:<OWNER>/<REPO>:environment:nonprod` and `repo:<OWNER>/<REPO>:environment:nonprod-destroy`, with audience `sts.amazonaws.com`. Restrict both GitHub Environments to the `master` deployment branch; require reviewers for `nonprod-destroy`. Set the non-secret GitHub Environment variable `NONPROD_ADMIN_CIDR` to the trusted administrator IPv4 CIDR (preferably `/32`); the workflow passes it to Terraform as `TF_VAR_admin_cidr`. Its permissions must cover:
 
 - Terraform actions for the nonprod EC2, VPC, IAM, security-group, EIP, and S3 transfer-bucket resources, including `iam:PassRole` for the node instance profile.
 - S3 state access to `Nonprod/vpc/terraform.tfstate` and its `.tflock` object, plus `s3:ListBucket` scoped to that prefix and `s3:GetBucketVersioning` on the state bucket.
