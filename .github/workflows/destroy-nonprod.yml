@@ -36,6 +36,7 @@ jobs:
       AWS_REGION: us-east-1
       TF_IN_AUTOMATION: "true"
       TF_INPUT: "false"
+      TF_VAR_admin_cidr: ${{ vars.NONPROD_ADMIN_CIDR }}
     steps:
       - name: Check destruction confirmation
         if: inputs.operation == 'destroy'
@@ -54,6 +55,16 @@ jobs:
 
       - name: Check out repository
         uses: actions/checkout@v4
+
+      - name: Require the nonprod administrator CIDR
+        env:
+          NONPROD_ADMIN_CIDR: ${{ vars.NONPROD_ADMIN_CIDR }}
+        shell: bash
+        run: |
+          if [[ -z "$NONPROD_ADMIN_CIDR" ]]; then
+            echo "::error::Set the repository Actions variable NONPROD_ADMIN_CIDR to your trusted administrator IPv4 CIDR (preferably /32)."
+            exit 1
+          fi
 
       - name: Configure AWS credentials with OIDC
         uses: aws-actions/configure-aws-credentials@v4
