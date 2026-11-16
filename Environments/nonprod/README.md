@@ -709,7 +709,9 @@ This is an important, state-changing operation. `kubeadm init` checks prerequisi
 
 ### Step 15 - Configure kubectl for the SSM user
 
-After initialization succeeds, run on the **control plane** as the regular SSM user:
+When using the automated Ansible workflow, it creates `/home/ssm-user/.kube/config` from `/etc/kubernetes/admin.conf` on the first control-plane node, with `ssm-user` ownership and mode `0600`. After the configure workflow succeeds, `kubectl get nodes` should work in a new SSM shell without manual setup.
+
+For a manual initialization or to restore a missing kubeconfig, run on the **control plane** as the regular SSM user:
 
 ```bash
 mkdir -p "$HOME/.kube"
@@ -717,7 +719,7 @@ sudo cp -i /etc/kubernetes/admin.conf "$HOME/.kube/config"
 sudo chown "$(id -u):$(id -g)" "$HOME/.kube/config"
 ```
 
-**Why:** `admin.conf` holds the cluster address, certificate authority, and administrator credentials. Placing it in the current user's default kubeconfig path allows `kubectl` to run without `sudo`. It grants cluster-admin access, so protect the file.
+**Why:** `admin.conf` holds the cluster address, certificate authority, and administrator credentials. Placing it in the current user's default kubeconfig path allows `kubectl` to run without `sudo`. It grants cluster-admin access, so protect the file and never copy it to workers or commit it to Git.
 
 Test:
 

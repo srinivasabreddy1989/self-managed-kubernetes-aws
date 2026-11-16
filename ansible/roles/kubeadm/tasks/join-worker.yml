@@ -16,6 +16,7 @@
       - "{{ hostvars['localhost'].kubeadm_discovery_hash }}"
       - --cri-socket
       - unix:///run/containerd/containerd.sock
+  become: true
   when: not kubelet_config.stat.exists
   changed_when: true
   no_log: true

@@ -47,3 +47,20 @@
   retries: 60
   delay: 10
   until: local_api_ready.rc == 0 and local_api_ready.stdout | trim == 'ok'
+
+- name: Create kubeconfig directory for the SSM operator
+  ansible.builtin.file:
+    path: /home/ssm-user/.kube
+    state: directory
+    owner: ssm-user
+    group: ssm-user
+    mode: "0700"
+
+- name: Install admin kubeconfig for the SSM operator
+  ansible.builtin.copy:
+    src: /etc/kubernetes/admin.conf
+    dest: /home/ssm-user/.kube/config
+    remote_src: true
+    owner: ssm-user
+    group: ssm-user
+    mode: "0600"
