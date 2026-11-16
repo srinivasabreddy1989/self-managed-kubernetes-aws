@@ -80,6 +80,14 @@
     - role: kubeadm
       tasks_from: join-worker.yml
 
+- name: Install kubectl credentials for SSM users on joined control planes
+  hosts: control_plane
+  gather_facts: false
+  become: true
+  roles:
+    - role: kubeadm
+      tasks_from: ssm-kubeconfig.yml
+
 - name: Revoke temporary credentials and verify the cluster
   hosts: control_plane
   gather_facts: false
