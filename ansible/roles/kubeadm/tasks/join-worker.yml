@@ -4,6 +4,10 @@
     path: /etc/kubernetes/kubelet.conf
   register: kubelet_config
 
+- name: Report whether this worker needs to join
+  ansible.builtin.debug:
+    msg: "{{ inventory_hostname }}: {{ 'already joined; kubelet.conf exists, skipping' if kubelet_config.stat.exists else 'not joined; running kubeadm join as root' }}"
+
 - name: Join this worker only when not already joined
   ansible.builtin.command:
     argv:
