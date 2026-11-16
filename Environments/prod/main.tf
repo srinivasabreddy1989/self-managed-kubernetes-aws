@@ -85,6 +85,7 @@ module "load_balancer" {
   load_balancer_sg_id = module.security_groups.load_balancer_sg_id
 
   control_plane_instance_ids = module.ec2.control_plane_instance_ids
+  enable_deletion_protection = var.enable_nlb_deletion_protection
 
   tags = {
     Environment = "production"

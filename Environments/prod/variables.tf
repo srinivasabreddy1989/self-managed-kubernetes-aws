@@ -26,6 +26,11 @@ variable "private_subnet_cidrs" {
   type = list(string)
 }
 
+variable "enable_nlb_deletion_protection" {
+  description = "Keep deletion protection enabled except during an approved destroy"
+  type        = bool
+  default     = true
+}
 
 variable "control_plane_instance_type" {
   description = "Instance type for Kubernetes control-plane nodes"

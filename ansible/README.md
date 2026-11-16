@@ -1,6 +1,6 @@
 # Ansible cluster automation
 
-The shared playbook configures kubeadm clusters over AWS Systems Manager. The nonprod GitHub workflow creates infrastructure, waits for SSM, and then runs the playbook. Production inventory and variables are included for the later production backend/workflow; production Terraform is not run by CI yet.
+The shared playbook configures kubeadm clusters over AWS Systems Manager. The nonprod and prod GitHub workflows create their infrastructure, wait for SSM, then run the same playbook with separate inventory and topology variables.
 
 ## Versions and environment
 
@@ -30,13 +30,13 @@ aws s3api put-bucket-versioning \
   --versioning-configuration Status=Enabled
 ```
 
-The nonprod workflows use the OIDC role `self-managed-kubernetes-setup` in account `982468346394`. Because the jobs use GitHub Environments, its OIDC trust policy must allow the subjects `repo:<OWNER>/<REPO>:environment:nonprod` and `repo:<OWNER>/<REPO>:environment:nonprod-destroy`, with audience `sts.amazonaws.com`. Restrict both GitHub Environments to the `master` deployment branch; require reviewers for `nonprod-destroy`. Set the repository-level Actions variable `NONPROD_ADMIN_CIDR` to the trusted administrator IPv4 CIDR (preferably `/32`); both workflows pass it to Terraform as `TF_VAR_admin_cidr`. Its permissions must cover:
+The workflows use the OIDC role `self-managed-kubernetes-setup` in account `982468346394`. Its trust policy must allow the subjects `repo:<OWNER>/<REPO>:environment:nonprod`, `repo:<OWNER>/<REPO>:environment:nonprod-destroy`, and `repo:<OWNER>/<REPO>:environment:prod`, with audience `sts.amazonaws.com`. Restrict these GitHub Environments to the `master` deployment branch and require reviewers for `nonprod-destroy` and `prod`. Set the repository-level Actions variable `NONPROD_ADMIN_CIDR` to the trusted administrator IPv4 CIDR (preferably `/32`); nonprod passes it to Terraform as `TF_VAR_admin_cidr`. The role currently has broad `AdministratorAccess`; reduce it to least privilege after the workflows are verified. It must cover:
 
-- Terraform actions for the nonprod EC2, VPC, IAM, security-group, EIP, and S3 transfer-bucket resources, including `iam:PassRole` for the node instance profile.
-- S3 state access to `Nonprod/vpc/terraform.tfstate` and its `.tflock` object, plus `s3:ListBucket` scoped to that prefix and `s3:GetBucketVersioning` on the state bucket.
-- `ec2:DescribeInstances`, `ssm:DescribeInstanceInformation`, `ssm:StartSession`, and `ssm:TerminateSession` for the nonprod nodes.
-- `s3:GetBucketLocation`, `s3:ListBucket`, `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on the dedicated SSM transfer bucket.
+- Terraform actions for both environments' EC2, VPC, IAM, security-group, EIP, NLB, target-group, listener, and S3 transfer-bucket resources, including `iam:PassRole` for each node instance profile.
+- S3 state access to `Nonprod/vpc/terraform.tfstate`, `Production/vpc/terraform.tfstate`, and both `.tflock` objects, plus `s3:ListBucket` scoped to those prefixes and `s3:GetBucketVersioning` on the state bucket.
+- `ec2:DescribeInstances`, `ssm:DescribeInstanceInformation`, `ssm:StartSession`, and `ssm:TerminateSession` for the tagged nonprod and production nodes.
+- `s3:GetBucketLocation`, `s3:ListBucket`, `s3:GetObject`, `s3:PutObject`, and `s3:DeleteObject` on both dedicated SSM transfer buckets.
 
-The SSM plugin needs a transfer bucket because Ansible modules are sent through S3. Terraform creates a separate private, unversioned bucket with one-day expiration; do not point it at the versioned Terraform state bucket. The EC2 nodes need outbound access to SSM and S3. The state bucket currently reports versioning as disabled; enable S3 versioning before either workflow runs, or the preflight guard will fail. Configure GitHub Environments `nonprod` and `nonprod-destroy`; protect the latter with required reviewers. The destroy workflow is manual, requires a typed confirmation, displays a resource summary and digest in plan mode, then requires that reviewed digest on a second run before applying the same plan generated in that run.
+The SSM plugin needs a transfer bucket because Ansible modules are sent through S3. Terraform creates a separate private, unversioned bucket per environment with one-day expiration; do not point it at the versioned Terraform state bucket. The EC2 nodes need outbound access to SSM and S3. The state bucket must have versioning enabled; both workflows check this before running. The nonprod state key is `Nonprod/vpc/terraform.tfstate`; production uses `Production/vpc/terraform.tfstate`. Production deploy and destroy runs use the protected `prod` GitHub Environment. Both destroy workflows are manual, require typed confirmation, display a resource summary and digest in plan mode, then require that reviewed digest on a second run before applying destruction. The production destroy workflow disables NLB deletion protection only after that confirmation and approval.
 
-Terraform state and plans are never uploaded as workflow artifacts. The S3 backend key is `Nonprod/vpc/terraform.tfstate`; the workflow checks bucket versioning before use. Do not run `terraform init -migrate-state` unless a non-empty local state has been deliberately reconciled.
+Terraform state and plans are never uploaded as workflow artifacts. Production variables are committed in the nonsecret `Environments/prod/production.auto.tfvars`. Do not run `terraform init -migrate-state` unless a non-empty local state has been deliberately reconciled.

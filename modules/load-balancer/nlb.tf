@@ -12,7 +12,7 @@ resource "aws_lb" "kubernetes_api" {
 
   enable_cross_zone_load_balancing = true
 
-  enable_deletion_protection = true
+  enable_deletion_protection = var.enable_deletion_protection
 
   tags = merge(var.tags, {
     Name = "${var.name_prefix}-api-nlb"

@@ -1,6 +1,15 @@
 
 terraform {
-  required_version = ">= 1.6.0"
+  required_version = ">= 1.10.0"
+
+  backend "s3" {
+    bucket              = "terraform-statefile-srinivasa"
+    key                 = "Production/vpc/terraform.tfstate"
+    region              = "us-east-1"
+    encrypt             = true
+    use_lockfile        = true
+    allowed_account_ids = ["982468346394"]
+  }
 
   required_providers {
     aws = {

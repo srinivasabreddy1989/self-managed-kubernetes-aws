@@ -24,6 +24,12 @@ variable "control_plane_instance_ids" {
   type        = map(string)
 }
 
+variable "enable_deletion_protection" {
+  description = "Whether deletion protection is enabled on the NLB"
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Common resource tags"
   type        = map(string)
